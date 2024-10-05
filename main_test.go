@@ -17,7 +17,7 @@ func TestAction(t *testing.T) {
     router.POST("/device/:id/:action", action)
 
     // Create a test request with a valid ID and action
-    req, err := http.NewRequest(http.MethodPost, "/device/192.168.101.170/on", nil)
+    req, err := http.NewRequest(http.MethodPost, "/device/192.168.101.170", "on")
     if err != nil {
         t.Fatalf("Could not create request: %v", err)
     }
