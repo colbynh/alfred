@@ -3,92 +3,62 @@ package main
 import (
     "net/http"
     "github.com/gin-gonic/gin"
-    "os/exec"
-    "log"
+    // "log"
+    "fmt"
+    // "context"
 )
 
 type User struct {
-    ID    string `json:"id"`
-    Name  string `json:"name"`
-    Email string `json:"email"`
+    ID     string  `json:"id"`
+    Firstname  string  `json:"firstname"`
+    Lastname string  `json:"lastname"`
 }
 
-// In-memory user storage
-var users = []User{}
+var users = []User{
+    {ID: "1", Firstname: "Colby", Lastname: "Chenard"},
+    {ID: "2", Firstname: "Jenny", Lastname: "Wallace"},
+    {ID: "3", Firstname: "Dutch", Lastname: "eroni"},
+}
 
 func main() {
+    // manager := NewMongoDBManager()
+	// client, err := manager.ConnectToMongoDB()
+	// if err != nil {
+	// 	log.Fatalf("Error connecting to MongoDB: %v", err)
+	// }
+	// defer func() {
+	// 	if err = client.Disconnect(context.TODO()); err != nil {
+	// 		log.Fatalf("Failed to disconnect MongoDB client: %v", err)
+	// 	}
+	// 	fmt.Println("Disconnected from MongoDB successfully")
+	// }()
+
     router := gin.Default()
 
-    // Routes
+    // Kasa routes
     router.GET("/device/action/:id", getUsers)
     router.POST("/device/:id/:action", action)
+
+    // User routes
     router.GET("/users/:id", getUserByID)
     router.PUT("/users/:id", updateUser)
-    router.DELETE("/users/:id", deleteUser)
+    // router.PUT("/users/create/:id", createUser)
+
+    router.POST("/users/create", func(c *gin.Context) {
+        var user User
+        c.BindJSON(&user)
+        fmt.Printf("User to create: %v\n", user)
+        c.JSON(http.StatusOK, gin.H{"user": user.Firstname})
+
+    })
+        router.DELETE("/users/:id", deleteUser)
+    
+    // Hue routes
 
     // Start the server
     router.Run(":8080")
 }
 
-func getUsers(c *gin.Context) {
-    c.JSON(http.StatusOK, users)
-}
 
-func action(c *gin.Context) {
-	id := c.Param("id")
-    action := c.Param("action")
 
-    // Construct the command
-    cmd := exec.Command("kasa", "--host", id, action)
-    output, err := cmd.Output()
 
-    // Handle error in command execution
-    if err != nil {
-        log.Printf("Error executing command: %v", err)
-        c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to execute command", "details": err.Error()})
-        return
-    }
-
-    // Return output as JSON response
-    c.JSON(http.StatusOK, gin.H{"message": "Command executed successfully", "output": string(output)})
-}
-
-func getUserByID(c *gin.Context) {
-    id := c.Param("id")
-    for _, user := range users {
-        if user.ID == id {
-            c.JSON(http.StatusOK, user)
-            return
-        }
-    }
-    c.JSON(http.StatusNotFound, gin.H{"message": "user not found"})
-}
-
-func updateUser(c *gin.Context) {
-    id := c.Param("id")
-    var updatedUser User
-    if err := c.BindJSON(&updatedUser); err != nil {
-        return
-    }
-
-    for i, user := range users {
-        if user.ID == id {
-            users[i] = updatedUser
-            c.JSON(http.StatusOK, updatedUser)
-            return
-        }
-    }
-    c.JSON(http.StatusNotFound, gin.H{"message": "user not found"})
-}
-
-func deleteUser(c *gin.Context) {
-    id := c.Param("id")
-    for i, user := range users {
-        if user.ID == id {
-            users = append(users[:i], users[i+1:]...)
-            c.JSON(http.StatusOK, gin.H{"message": "user deleted"})
-            return
-        }
-    }
-    c.JSON(http.StatusNotFound, gin.H{"message": "user not found"})
-}
