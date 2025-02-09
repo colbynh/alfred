@@ -1,9 +1,9 @@
 package main
 
 import (
+	"github.com/colbynh/alfred/internal/device/outlet"
 	"github.com/gin-contrib/logger"
 	"github.com/gin-gonic/gin"
-	"internal/device/outlet"
 )
 
 type application struct {
