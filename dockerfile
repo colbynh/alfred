@@ -18,6 +18,8 @@ RUN go mod download
 
 COPY . .
 
+WORKDIR /app/cmd/api 
+
 RUN go get .
 RUN go build -gcflags=all="-N -l" -o microservice .
 

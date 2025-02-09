@@ -1,23 +1,26 @@
 
 
 services:
-  mongo:
-      image: mongo:8
-      container_name: db
-      ports:
-        - "27017:27017"
-      volumes:
-        - ./data:/data/db
+  # mongo:
+  #     image: mongo:8
+  #     container_name: db
+  #     ports:
+  #       - "27017:27017"
+  #     volumes:
+  #       - ./data:/data/db
 
   web:
     build: .
     container_name: web_api
     ports:
       - "8080:8080"
-    depends_on:
-      - mongo
-    environment:
-      - MONGO_URL=mongodb://mongo:27017
+    # depends_on:
+    #   - mongo
+    # environment:
+    #   - MONGO_URL=mongodb://mongo:27017
 
+
+    # networks:
+    # - kasa_default
   
     
