@@ -1,6 +1,6 @@
 
 
-services:
+# services:
   # mongo:
   #     image: mongo:8
   #     container_name: db
@@ -9,18 +9,20 @@ services:
   #     volumes:
   #       - ./data:/data/db
 
+version: "3.9"
+services:
   web:
     build: .
     container_name: web_api
     ports:
       - "8080:8080"
-    # depends_on:
-    #   - mongo
+    volumes:
+      - ./:/app
     # environment:
-    #   - MONGO_URL=mongodb://mongo:27017
+    #   - GOPROXY=direct  # Ensures Go modules are downloaded directly
+    #   - GOSUMDB=off      # Disables checksum verification to prevent network failures
+    dns:
+      - 8.8.8.8
+      - 8.8.4.4
 
 
-    # networks:
-    # - kasa_default
-  
-    
