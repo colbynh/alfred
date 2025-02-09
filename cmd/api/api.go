@@ -30,14 +30,12 @@ func (app *application) mount() *gin.Engine {
 	svr := gin.New()
 	svr.Use(logger.SetLogger())
 
-	svr.POST("/devices/outlets/:id/:brand/:action", OutletActionHandler(svr))
+	svr.POST("/device/outlet/:brand/:id/:action", outlet.OutletActionHandler(svr))
+	return svr
 }
 
-func (app *application) run() error {
-	svr := gin.New()
+func (app *application) run(svr *gin.Engine) error {
 	svr.Use(logger.SetLogger())
-
-	// Listen and Server in 0.0.0.0:8080
 	if err := svr.Run(app.config.addr); err != nil {
 		return err
 	}

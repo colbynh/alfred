@@ -6,12 +6,14 @@ import (
 
 func main() {
 	cfg := config{
-		addr: "8080",
+		addr: "0.0.0.0:8080",
 	}
 
 	app := &application{
 		config: cfg,
 	}
 
-	log.Fatal(app.run())
+	svr := app.mount()
+
+	log.Fatal(app.run(svr))
 }
