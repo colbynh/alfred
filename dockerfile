@@ -1,14 +1,13 @@
-FROM golang:1.23.5-alpine
+FROM golang:1.23.5-alpine3.21
 WORKDIR /app
 
+RUN apk update
 RUN apk add --no-cache python3 py3-pip
 
 RUN python3 -m venv /tmp/kasa
 RUN yes | /tmp/kasa/bin/pip install python-kasa -q -q -q --exists-action i
 
-RUN apk add --no-cache tzdata 
-RUN apk update						      # update the local registry
-RUN apk add busybox-extras			# install telnet and some other basic tools
+RUN apk add --no-cache tzdata 						      # update the local registry
 RUN apk add curl
 
 RUN cp -R /tmp/kasa/bin/kasa /usr/local/bin/
