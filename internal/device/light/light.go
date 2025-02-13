@@ -1,7 +1,6 @@
 package light
 
 import (
-	"fmt"
 	"github.com/gin-gonic/gin"
 	"net/http"
 )
@@ -12,7 +11,6 @@ func LightActionHandler(svr *gin.Engine) gin.HandlerFunc {
 		brand := c.Param("brand")
 		ip := c.Param("ip")
 		action := c.Param("action")
-		fmt.Println("debugging working!!!!!!!!!!!!!")
 
 		light, err := newLight(brand, ip, id, c)
 		if err != nil {

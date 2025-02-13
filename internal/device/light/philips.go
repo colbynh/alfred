@@ -8,7 +8,6 @@ import (
 	"github.com/gin-gonic/gin"
 	"io"
 	"net/http"
-	"net/http/httputil"
 )
 
 type philipsLight struct {
@@ -74,47 +73,37 @@ func (p *philipsLight) execAction(action string) error {
 }
 
 func (p *philipsLight) getAll() error {
-	fmt.Println("getAll function!!!")
 	return runGetRequest(p)
 }
 
 func (p *philipsLight) on() error {
-	fmt.Println("on function!!!")
 	jsonString := `{"on":{"on":true}}`
 
-	// Unmarshal the JSON string into a map
 	var jsonData map[string]interface{}
 	if err := json.Unmarshal([]byte(jsonString), &jsonData); err != nil {
 		fmt.Printf("unmarshal error: %s\n", err)
 		return err
 	}
 
-	// Marshal the map back to JSON bytes
 	jsonBytes, err := json.Marshal(jsonData)
 	if err != nil {
 		fmt.Printf("marshal error: %s\n", err)
 		return err
 	}
 
-	// Set the request body
 	p.ctx.Request.Body = io.NopCloser(bytes.NewBuffer(jsonBytes))
-
-	fmt.Println("Running put request!!!!!!!!!!!!!!!!!!!!!!!!!!!")
 	return runPutRequest(p)
 }
 
 func (p *philipsLight) off() error {
-	fmt.Println("on function!!!")
 	jsonString := `{"on":{"on":false}}`
 
-	// Unmarshal the JSON string into a map
 	var jsonData map[string]interface{}
 	if err := json.Unmarshal([]byte(jsonString), &jsonData); err != nil {
 		fmt.Printf("unmarshal error: %s\n", err)
 		return err
 	}
 
-	// Marshal the map back to JSON bytes
 	jsonBytes, err := json.Marshal(jsonData)
 	if err != nil {
 		fmt.Printf("marshal error: %s\n", err)
@@ -137,8 +126,6 @@ func (p *philipsLight) color() error {
 // Helpers
 
 func runPutRequest(p *philipsLight) error {
-	fmt.Println("Running put request!!!!!!!!!!!!!!!!!!!!!!!!!!!")
-
 	url := fmt.Sprintf("https://%s/clip/v2/resource/light/%s", p.ip, p.id)
 
 	bodyBytes, err := io.ReadAll(p.ctx.Request.Body)
@@ -159,20 +146,13 @@ func runPutRequest(p *philipsLight) error {
 			TLSClientConfig: &tls.Config{InsecureSkipVerify: true},
 		},
 	}
-	requestDump, err := httputil.DumpRequestOut(req, true)
-	if err != nil {
-		return err
-	}
-	fmt.Printf("*****Request insecure: %s\n RequestBody: %s\n", string(requestDump), req.Body)
 
 	resp, err := client.Do(req)
 	if err != nil {
 		return err
 	}
-	defer resp.Body.Close()
 
-	respDump, _ := httputil.DumpResponse(resp, true)
-	fmt.Printf("*****Responsedump: %s\n", respDump)
+	defer resp.Body.Close()
 
 	if resp.StatusCode != http.StatusOK {
 		return fmt.Errorf("failed to perform action: %s", p.actionName)
@@ -181,8 +161,6 @@ func runPutRequest(p *philipsLight) error {
 }
 
 func runPostRequest(p *philipsLight) error {
-	fmt.Println("Running post request!!!!!!!!!!!!!!!!!!!!!!!!!!!")
-
 	url := fmt.Sprintf("https://%s/clip/v2/resource/light/%s", p.ip, p.id)
 
 	bodyBytes, err := io.ReadAll(p.ctx.Request.Body)
@@ -203,20 +181,13 @@ func runPostRequest(p *philipsLight) error {
 			TLSClientConfig: &tls.Config{InsecureSkipVerify: true},
 		},
 	}
-	requestDump, err := httputil.DumpRequestOut(req, true)
-	if err != nil {
-		return err
-	}
-	fmt.Printf("*****Request insecure: %s\n RequestBody: %s\n", string(requestDump), req.Body)
 
 	resp, err := client.Do(req)
 	if err != nil {
 		return err
 	}
-	defer resp.Body.Close()
 
-	respDump, _ := httputil.DumpResponse(resp, true)
-	fmt.Printf("*****Responsedump: %s\n", respDump)
+	defer resp.Body.Close()
 
 	if resp.StatusCode != http.StatusOK {
 		return fmt.Errorf("failed to perform action: %s", p.actionName)
@@ -225,14 +196,12 @@ func runPostRequest(p *philipsLight) error {
 }
 
 func runGetRequest(p *philipsLight) error {
-	fmt.Println("Running GET request!!!!!!!!!!!!!!!!!!!!!!!!!!!")
 	var url string
 	if p.actionName == "getAll" {
 		url = fmt.Sprintf("https://%s/clip/v2/resource/light", p.ip)
 	} else {
 		url = fmt.Sprintf("https://%s/clip/v2/resource/light/%s", p.ip, p.id)
 	}
-	fmt.Printf("url: %s\n", url)
 	req, err := http.NewRequest(http.MethodGet, url, nil)
 	if err != nil {
 		return err
@@ -246,21 +215,13 @@ func runGetRequest(p *philipsLight) error {
 			TLSClientConfig: &tls.Config{InsecureSkipVerify: true},
 		},
 	}
-	requestDump, err := httputil.DumpRequestOut(req, true)
-	if err != nil {
-		fmt.Printf("*****Requesdump fail: %s\n", err)
-		return err
-	}
-	fmt.Printf("*****Request insecure: %s\n", string(requestDump))
 
 	resp, err := client.Do(req)
 	if err != nil {
 		return err
 	}
-	defer resp.Body.Close()
 
-	respDump, _ := httputil.DumpResponse(resp, true)
-	fmt.Printf("*****Responsedump: %s\n", respDump)
+	defer resp.Body.Close()
 
 	if resp.StatusCode != http.StatusOK {
 		return fmt.Errorf("failed to perform action: %s", p.actionName)
@@ -276,8 +237,6 @@ func runDeleteRequest(p *philipsLight) error {
 	}
 
 	url := fmt.Sprintf("https://%s/clip/v2/resource/light/%s", p.ip, p.id)
-
-	fmt.Println("Running request!!!!!!!!!!!!!!!!!!!!!!!!!!!")
 
 	jsonBytes, err := json.Marshal(p.ctx.Request.Body)
 	if err != nil {
@@ -297,20 +256,13 @@ func runDeleteRequest(p *philipsLight) error {
 			TLSClientConfig: &tls.Config{InsecureSkipVerify: true},
 		},
 	}
-	requestDump, err := httputil.DumpRequestOut(req, true)
-	if err != nil {
-		return err
-	}
-	fmt.Printf("*****Request insecure: %s\n RequestBody: %s\n", string(requestDump), req.Body)
 
 	resp, err := client.Do(req)
 
-	respDump, _ := httputil.DumpResponse(resp, true)
-
-	fmt.Printf("*****Responsedump: %s\n", respDump)
 	if err != nil {
 		return err
 	}
+
 	defer resp.Body.Close()
 
 	if resp.StatusCode != http.StatusOK {
