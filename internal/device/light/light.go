@@ -1,10 +1,9 @@
 package light
 
 import (
-	"io"
-	"net/http"
-
+	"fmt"
 	"github.com/gin-gonic/gin"
+	"net/http"
 )
 
 func LightActionHandler(svr *gin.Engine) gin.HandlerFunc {
@@ -13,13 +12,9 @@ func LightActionHandler(svr *gin.Engine) gin.HandlerFunc {
 		brand := c.Param("brand")
 		ip := c.Param("ip")
 		action := c.Param("action")
-		jsonPayload, err := io.ReadAll(c.Request.Body)
-		if err != nil {
-			c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid request body"})
-			return
-		}
+		fmt.Println("debugging working!!!!!!!!!!!!!")
 
-		light, err := newLight(brand, ip, id, action, string(jsonPayload))
+		light, err := newLight(brand, ip, id, c)
 		if err != nil {
 			c.JSON(http.StatusBadRequest, gin.H{"error": "Unsupported light brand"})
 			return
@@ -30,7 +25,7 @@ func LightActionHandler(svr *gin.Engine) gin.HandlerFunc {
 			"ip":     ip,
 			"id":     id,
 			"action": action,
-			"body":   jsonPayload,
+			"body":   c.Request.Body,
 			"result": err,
 		})
 	}

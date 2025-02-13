@@ -5,6 +5,7 @@ import (
 	"github.com/colbynh/alfred/internal/device/outlet"
 	"github.com/gin-contrib/logger"
 	"github.com/gin-gonic/gin"
+	"net/http"
 )
 
 type application struct {
@@ -20,19 +21,26 @@ type config struct {
 	apiURL string
 }
 
-type dbConfig struct {
-	addr         string
-	maxOpenConns int
-	maxIdleConns int
-	maxIdleTime  string
-}
-
 func (app *application) mount() *gin.Engine {
 	svr := gin.New()
 	svr.Use(logger.SetLogger())
 
+	// Middleware to require a header
+	authHeader := func(c *gin.Context) {
+		if c.GetHeader("hue-application-key") == "" {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "X-Required-Header is required"})
+			c.Abort()
+			return
+		}
+		c.Next()
+	}
+
+	// Apply the middleware to specific routes
 	svr.POST("/device/outlet/:brand/:id/:action", outlet.OutletActionHandler(svr))
-	svr.PUT("/device/light/:brand/:ip/:id/:action", light.LightActionHandler(svr))
+	svr.PUT("/device/light/:brand/:ip/:id/:action", authHeader, light.LightActionHandler(svr))
+	svr.GET("/device/light/:brand/:ip/:action", authHeader, light.LightActionHandler(svr))
+	// TODO: add delete route and test
+
 	return svr
 }
 

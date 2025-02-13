@@ -2,6 +2,7 @@ package light
 
 import (
 	"errors"
+	"github.com/gin-gonic/gin"
 )
 
 type light interface {
@@ -10,12 +11,13 @@ type light interface {
 	setBrightness() error
 	color() error
 	execAction(action string) error
+	getGinContext() *gin.Context
 }
 
-func newLight(brand, ip, id, action, jsonPayload string) (light, error) {
+func newLight(brand string, ip string, id string, ctx *gin.Context) (light, error) {
 	switch brand {
 	case "philips":
-		return &philipsLight{brand: brand, ip: ip, id: id, jsonPayload: jsonPayload}, nil
+		return &philipsLight{brand: brand, ip: ip, id: id, ctx: ctx}, nil
 	default:
 		return nil, errors.New("unsupported light brand")
 	}
