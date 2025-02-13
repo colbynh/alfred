@@ -1,6 +1,7 @@
 package main
 
 import (
+	"github.com/colbynh/alfred/internal/device/light"
 	"github.com/colbynh/alfred/internal/device/outlet"
 	"github.com/gin-contrib/logger"
 	"github.com/gin-gonic/gin"
@@ -31,6 +32,7 @@ func (app *application) mount() *gin.Engine {
 	svr.Use(logger.SetLogger())
 
 	svr.POST("/device/outlet/:brand/:id/:action", outlet.OutletActionHandler(svr))
+	svr.PUT("/device/light/:brand/:ip/:id/:action", light.LightActionHandler(svr))
 	return svr
 }
 
