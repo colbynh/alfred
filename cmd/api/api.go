@@ -16,7 +16,6 @@ type application struct {
 
 type config struct {
 	addr   string
-	db     dbConfig
 	env    string
 	apiURL string
 }
@@ -36,9 +35,11 @@ func (app *application) mount() *gin.Engine {
 	}
 
 	// Apply the middleware to specific routes
-	svr.POST("/device/outlet/:brand/:id/:action", outlet.OutletActionHandler(svr))
-	svr.PUT("/device/light/:brand/:ip/:id/:action", authHeader, light.LightActionHandler(svr))
-	svr.GET("/device/light/:brand/:ip/:action", authHeader, light.LightActionHandler(svr))
+	svr.POST("/api/v1/device/outlet/:brand/:id/:action", outlet.OutletActionHandler(svr))
+	svr.GET("/api/v1/device/outlet/:brand/:id/:action", outlet.OutletActionHandler(svr))
+
+	svr.PUT("/api/v1/device/light/:brand/:ip/:id/:action", authHeader, light.LightActionHandler(svr))
+	svr.GET("/api/v1/device/light/:brand/:ip/:action", authHeader, light.LightActionHandler(svr))
 	// TODO: add delete route and test
 
 	return svr
