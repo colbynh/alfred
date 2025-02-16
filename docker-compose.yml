@@ -12,15 +12,14 @@
 version: "3.9"
 services:
   web:
-    build: .
-    container_name: web_api
+    build: 
+      context: .
+      dockerfile: dockerfile
+    container_name: api
     ports:
       - "8080:8080"
     volumes:
       - ./:/app
-    # environment:
-    #   - GOPROXY=direct  # Ensures Go modules are downloaded directly
-    #   - GOSUMDB=off      # Disables checksum verification to prevent network failures
     dns:
       - 8.8.8.8
       - 8.8.4.4
