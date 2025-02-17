@@ -8,7 +8,8 @@ RUN python3 -m venv /tmp/kasa
 RUN yes | /tmp/kasa/bin/pip install python-kasa -q -q -q --exists-action i
 
 RUN apk add --no-cache tzdata 						      # update the local registry
-RUN apk add curl
+RUN apk add curl && \
+    apk add nmap
 
 RUN cp -R /tmp/kasa/bin/kasa /usr/local/bin/
 

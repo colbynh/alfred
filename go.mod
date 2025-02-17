@@ -5,6 +5,7 @@ go 1.23.5
 require (
 	github.com/gin-contrib/logger v1.2.3
 	github.com/gin-gonic/gin v1.10.0
+	github.com/sirupsen/logrus v1.9.3
 )
 
 require (
