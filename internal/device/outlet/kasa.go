@@ -2,15 +2,16 @@ package outlet
 
 import (
 	"encoding/json"
-	"errors"
 	"fmt"
+	"github.com/gin-gonic/gin"
+	"github.com/sirupsen/logrus"
+	"net"
 	"net/http"
 	"os/exec"
 	"regexp"
 	"strings"
-
-	"github.com/gin-gonic/gin"
-	logrus "github.com/sirupsen/logrus"
+	"sync"
+	"time"
 )
 
 type kasaOutlet struct {
@@ -23,6 +24,57 @@ type ScanResult struct {
 	IPs []string `json:"ips"`
 }
 
+const (
+	timeout = 1 * time.Second // Timeout for checking each port
+	port    = "9999"          // Port to scan
+	subnet  = "192.168.101."  // Change this to your subnet
+	startIP = 1               // Starting IP address
+	endIP   = 254             // Ending IP address
+)
+
+// TODO: clean up error handling
+func scanIP(ip string, wg *sync.WaitGroup, results chan<- string, errors chan<- error) {
+	defer wg.Done()
+	address := net.JoinHostPort(ip, port)
+	conn, err := net.DialTimeout("tcp", address, timeout)
+	if err != nil {
+		// errors <- err
+		return
+	}
+	conn.Close()
+	results <- ip
+}
+
+func ScanOpenPorts() ([]string, []error) {
+	var wg sync.WaitGroup
+	results := make(chan string, endIP-startIP)
+	errors := make(chan error, endIP-startIP)
+	var openIPs []string
+	var errList []error
+
+	for i := startIP; i <= endIP; i++ {
+		ip := fmt.Sprintf("%s%d", subnet, i)
+		wg.Add(1)
+		go scanIP(ip, &wg, results, errors)
+	}
+
+	go func() {
+		wg.Wait()
+		close(results)
+		close(errors)
+	}()
+
+	for ip := range results {
+		openIPs = append(openIPs, ip)
+	}
+
+	for err := range errors {
+		errList = append(errList, err)
+	}
+
+	return openIPs, errList
+}
+
 func (k *kasaOutlet) getID() string {
 	return k.id
 }
@@ -32,29 +84,18 @@ func (k *kasaOutlet) getBrand() string {
 }
 
 func (k *kasaOutlet) discoverDevicesIps() (map[string]interface{}, error) {
-	k.logger.Debug("Executing nmap command to discover devices")
-	cmd := exec.Command("sh", "-c", `nmap -p 9999 --open --min-rate 10 100 192.168.101.0/24 | grep "Nmap scan report" | awk '{print $5}'`)
-
-	output, err := cmd.Output()
-	k.logger.Debug("nmap command string:", string(cmd.String()))
-
-	if err != nil {
-		k.logger.Error("Error executing nmap:", err)
-		return nil, err
+	k.logger.Debug("Scanning for open ports on subnet:", subnet)
+	ips, errs := ScanOpenPorts()
+	if errs != nil {
+		k.logger.Error("Error scanning open ports:", errs)
+		for _, e := range errs {
+			k.logger.Error(e)
+		}
+		return nil, errs[0]
 	}
+	k.logger.Debug("Open ports found:", ips)
 
-	result := strings.TrimSpace(string(output))
-	k.logger.Debug("nmap command output:", result)
-
-	var ipList []string
-	if result != "" {
-		ipList = strings.Split(result, "\n")
-	} else {
-		k.logger.Warn("No devices found")
-		return nil, errors.New("no devices found")
-	}
-
-	sr := ScanResult{IPs: ipList}
+	sr := ScanResult{IPs: ips}
 	jsonBytes, err := json.Marshal(sr)
 	if err != nil {
 		k.logger.Error("Error marshaling ScanResult:", err)
