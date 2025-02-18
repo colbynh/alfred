@@ -4,3 +4,4 @@ data
 pkg
 tmp
 bin
+go.work*
