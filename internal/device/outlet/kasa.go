@@ -1,11 +1,11 @@
+// Package outlet provides functionality for controlling smart outlets.
+// This file implements support for TP-Link Kasa smart outlets.
 package outlet
 
 import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"github.com/gin-gonic/gin"
-	"github.com/sirupsen/logrus"
 	"net"
 	"net/http"
 	"os/exec"
@@ -13,33 +13,54 @@ import (
 	"strings"
 	"sync"
 	"time"
+
+	"github.com/gin-gonic/gin"
+	"github.com/sirupsen/logrus"
 )
 
+// execCommand is a package variable that wraps exec.Command for testing purposes.
 var execCommand = exec.Command
 
+// kasaOutlet represents a TP-Link Kasa smart outlet device.
+// It implements the outlet interface for controlling the device state
+// and retrieving device information.
 type kasaOutlet struct {
-	id     string
-	c      *gin.Context
-	logger *logrus.Logger
+	id     string         // Unique identifier (typically IP address)
+	c      *gin.Context   // HTTP context for request handling
+	logger *logrus.Logger // Logger for operation tracking
 }
 
+// ScanResult represents the response format for device discovery.
+// It contains a list of IP addresses where Kasa devices were found.
 type ScanResult struct {
-	IPs []string `json:"ips"`
+	IPs []string `json:"ips"` // List of discovered device IPs
 }
 
+// Network scanning constants
 const (
 	timeout = 1 * time.Second // Timeout for checking each port
-	port    = "9999"          // Port to scan
-	subnet  = "192.168.101."  // Change this to your subnet
-	startIP = 1               // Starting IP address
-	endIP   = 254             // Ending IP address
+	port    = "9999"          // Default Kasa device port
+	subnet  = "192.168.101."  // Network subnet to scan
+	startIP = 1               // First IP address in scan range
+	endIP   = 254             // Last IP address in scan range
 )
 
-// TODO: clean up error handling
+// joinHostPort combines an IP address and port into a network address string.
+func joinHostPort(ip, port string) string {
+	return net.JoinHostPort(ip, port)
+}
+
+// dialTimeout attempts to establish a network connection with timeout.
+func dialTimeout(network, addr string, timeout time.Duration) (net.Conn, error) {
+	return net.DialTimeout(network, addr, timeout)
+}
+
+// scanIP checks if a specific IP address has the Kasa device port open.
+// It is used as a goroutine in the port scanning process.
 func scanIP(ip string, wg *sync.WaitGroup, results chan<- string) {
 	defer wg.Done()
-	address := net.JoinHostPort(ip, port)
-	conn, err := net.DialTimeout("tcp", address, timeout)
+	address := joinHostPort(ip, port)
+	conn, err := dialTimeout("tcp", address, timeout)
 	if err != nil {
 		return
 	}
@@ -49,6 +70,8 @@ func scanIP(ip string, wg *sync.WaitGroup, results chan<- string) {
 	}
 }
 
+// ScanOpenPorts scans the configured subnet for devices listening on the Kasa port.
+// It returns a list of IP addresses where the port is open and any errors encountered.
 func ScanOpenPorts() ([]string, error) {
 	var wg sync.WaitGroup
 	results := make(chan string, endIP-startIP)
@@ -74,14 +97,18 @@ func ScanOpenPorts() ([]string, error) {
 	return openIPs, nil
 }
 
+// getID returns the device identifier.
 func (k *kasaOutlet) getID() string {
 	return k.id
 }
 
+// getBrand returns the device brand name (always "kasa").
 func (k *kasaOutlet) getBrand() string {
 	return "kasa"
 }
 
+// discoverDevicesIps scans the network for Kasa devices and returns their IP addresses.
+// The result is formatted as a JSON object with an "ips" array.
 func (k *kasaOutlet) discoverDevicesIps() (map[string]interface{}, error) {
 	k.logger.Debug("Scanning for open ports on subnet:", subnet)
 	ips, err := ScanOpenPorts()
@@ -109,6 +136,8 @@ func (k *kasaOutlet) discoverDevicesIps() (map[string]interface{}, error) {
 	return jsonData, nil
 }
 
+// state retrieves the current state (on/off) of the outlet.
+// It returns the state as a JSON object with a "state" field.
 func (k *kasaOutlet) state() (map[string]interface{}, error) {
 	k.logger.Debug("Executing kasa state command")
 	cmd := execCommand("kasa", "--host", k.id, "state")
@@ -135,6 +164,8 @@ func (k *kasaOutlet) state() (map[string]interface{}, error) {
 	return jsonData, nil
 }
 
+// sysInfo retrieves system information from the outlet.
+// It returns device details including model and software version.
 func (k *kasaOutlet) sysInfo() (map[string]interface{}, error) {
 	k.logger.Debug("Executing kasa sysinfo command")
 	cmd := execCommand("kasa", "--host", k.id, "sysinfo")
@@ -164,6 +195,9 @@ func (k *kasaOutlet) sysInfo() (map[string]interface{}, error) {
 	return jsonData, nil
 }
 
+// action executes a command on the outlet and returns the result.
+// Supported actions are: "on", "off", "discover", "state", and "sysinfo".
+// The result is returned as a JSON response through the gin.Context.
 func (k *kasaOutlet) action(action string, c *gin.Context) error {
 	k.logger.Debug("Executing action:", action)
 	jsonData := map[string]interface{}{}

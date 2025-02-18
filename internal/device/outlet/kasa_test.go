@@ -1,3 +1,5 @@
+// Package outlet provides functionality for controlling smart outlets.
+// This test file contains unit tests for the Kasa smart outlet implementation.
 package outlet
 
 import (
@@ -16,36 +18,53 @@ import (
 	"github.com/stretchr/testify/assert"
 )
 
+// mock implements a test double for the outlet interface.
+// It allows for flexible behavior definition in tests by providing
+// function fields that can be set to desired test behaviors.
 type mock struct {
 	discoverDevicesIps func() (map[string]interface{}, error)
 }
 
+// DiscoverDevicesIps implements the outlet interface method for the mock.
+// It delegates to the function field, allowing for customizable test behavior.
 func (m *mock) DiscoverDevicesIps() (map[string]interface{}, error) {
 	return m.discoverDevicesIps()
 }
 
-// Add at package level
+// dialTimeoutFunc wraps the network dial timeout function to allow mocking.
+// This type enables tests to replace the network dialing behavior with
+// controlled test behavior.
 type dialTimeoutFunc struct {
 	f func(network, addr string, timeout time.Duration) (net.Conn, error)
 }
 
+// dialTimeoutWrapper provides a mutable reference to the dial timeout function.
+// This global variable allows tests to modify network connection behavior.
 var dialTimeoutWrapper = &dialTimeoutFunc{
 	f: func(network, addr string, timeout time.Duration) (net.Conn, error) {
 		return nil, nil
 	},
 }
 
-// Add at package level, near the top of the file
+// scanOpenPortsFunc wraps the port scanning function to allow mocking.
+// This type enables tests to replace the port scanning behavior with
+// controlled test behavior.
 type scanOpenPortsFunc struct {
 	f func() ([]string, []error)
 }
 
+// scanOpenPortsWrapper provides a mutable reference to the port scanning function.
+// This global variable allows tests to modify port scanning behavior.
 var scanOpenPortsWrapper = &scanOpenPortsFunc{
 	f: func() ([]string, []error) {
 		return nil, nil
 	},
 }
 
+// TestDiscoverDevicesIps verifies that the device discovery functionality
+// correctly identifies and returns IP addresses of Kasa devices.
+// It tests the successful case where devices are found on the network
+// and ensures the returned data structure is correctly formatted.
 func TestDiscoverDevicesIps(t *testing.T) {
 	logger := logrus.New()
 	logger.SetLevel(logrus.DebugLevel)
@@ -86,6 +105,9 @@ func TestDiscoverDevicesIps(t *testing.T) {
 	assert.Contains(t, ips, "192.168.101.170")
 }
 
+// TestState verifies that the outlet state can be retrieved correctly.
+// It tests the parsing of the device state response and ensures
+// the state is correctly represented in the returned JSON structure.
 func TestState(t *testing.T) {
 	logger := logrus.New()
 	logger.SetLevel(logrus.DebugLevel)
@@ -106,6 +128,9 @@ func TestState(t *testing.T) {
 	assert.Equal(t, "True", jsonData["state"])
 }
 
+// TestSysInfo verifies that the device system information can be retrieved correctly.
+// It tests the parsing of the device system information response and ensures
+// all expected fields are present in the returned JSON structure.
 func TestSysInfo(t *testing.T) {
 	logger := logrus.New()
 	logger.SetLevel(logrus.DebugLevel)
@@ -127,6 +152,9 @@ func TestSysInfo(t *testing.T) {
 	assert.Equal(t, "1.0.13", jsonData["sw_ver"])
 }
 
+// TestAction verifies that device actions (on/off) are executed correctly.
+// It tests the HTTP endpoint handling and command execution for device control,
+// ensuring proper response formatting and error handling.
 func TestAction(t *testing.T) {
 	logger := logrus.New()
 	logger.SetLevel(logrus.DebugLevel)
@@ -161,6 +189,10 @@ func TestAction(t *testing.T) {
 	assert.Equal(t, "success", response["status"])
 }
 
+// TestScanOpenPorts verifies that the port scanning functionality
+// correctly identifies open ports and handles errors.
+// It tests both successful port discovery and error conditions,
+// ensuring proper error propagation and result formatting.
 func TestScanOpenPorts(t *testing.T) {
 	// Store original function
 	originalDialTimeout := dialTimeoutWrapper.f
@@ -199,14 +231,31 @@ func TestScanOpenPorts(t *testing.T) {
 	assert.Contains(t, ips, "192.168.101.170")
 }
 
-// mockConn implements net.Conn interface with minimal implementation
+// mockConn provides a minimal implementation of net.Conn for testing.
+// It implements all required methods of the net.Conn interface with
+// no-op implementations suitable for testing.
 type mockConn struct{}
 
-func (m *mockConn) Read(b []byte) (n int, err error)   { return 0, nil }
-func (m *mockConn) Write(b []byte) (n int, err error)  { return 0, nil }
-func (m *mockConn) Close() error                       { return nil }
-func (m *mockConn) LocalAddr() net.Addr                { return nil }
-func (m *mockConn) RemoteAddr() net.Addr               { return nil }
-func (m *mockConn) SetDeadline(t time.Time) error      { return nil }
-func (m *mockConn) SetReadDeadline(t time.Time) error  { return nil }
+// Read implements net.Conn Read method
+func (m *mockConn) Read(b []byte) (n int, err error) { return 0, nil }
+
+// Write implements net.Conn Write method
+func (m *mockConn) Write(b []byte) (n int, err error) { return 0, nil }
+
+// Close implements net.Conn Close method
+func (m *mockConn) Close() error { return nil }
+
+// LocalAddr implements net.Conn LocalAddr method
+func (m *mockConn) LocalAddr() net.Addr { return nil }
+
+// RemoteAddr implements net.Conn RemoteAddr method
+func (m *mockConn) RemoteAddr() net.Addr { return nil }
+
+// SetDeadline implements net.Conn SetDeadline method
+func (m *mockConn) SetDeadline(t time.Time) error { return nil }
+
+// SetReadDeadline implements net.Conn SetReadDeadline method
+func (m *mockConn) SetReadDeadline(t time.Time) error { return nil }
+
+// SetWriteDeadline implements net.Conn SetWriteDeadline method
 func (m *mockConn) SetWriteDeadline(t time.Time) error { return nil }
