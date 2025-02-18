@@ -2,6 +2,7 @@ package outlet
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"github.com/gin-gonic/gin"
 	"github.com/sirupsen/logrus"
@@ -13,6 +14,8 @@ import (
 	"sync"
 	"time"
 )
+
+var execCommand = exec.Command
 
 type kasaOutlet struct {
 	id     string
@@ -33,46 +36,42 @@ const (
 )
 
 // TODO: clean up error handling
-func scanIP(ip string, wg *sync.WaitGroup, results chan<- string, errors chan<- error) {
+func scanIP(ip string, wg *sync.WaitGroup, results chan<- string) {
 	defer wg.Done()
 	address := net.JoinHostPort(ip, port)
 	conn, err := net.DialTimeout("tcp", address, timeout)
 	if err != nil {
-		// errors <- err
 		return
 	}
-	conn.Close()
-	results <- ip
+	if conn != nil {
+		conn.Close()
+		results <- ip
+	}
 }
 
-func ScanOpenPorts() ([]string, []error) {
+func ScanOpenPorts() ([]string, error) {
 	var wg sync.WaitGroup
 	results := make(chan string, endIP-startIP)
-	errors := make(chan error, endIP-startIP)
 	var openIPs []string
-	var errList []error
 
 	for i := startIP; i <= endIP; i++ {
 		ip := fmt.Sprintf("%s%d", subnet, i)
 		wg.Add(1)
-		go scanIP(ip, &wg, results, errors)
+		go scanIP(ip, &wg, results)
 	}
 
 	go func() {
 		wg.Wait()
 		close(results)
-		close(errors)
 	}()
 
 	for ip := range results {
 		openIPs = append(openIPs, ip)
 	}
-
-	for err := range errors {
-		errList = append(errList, err)
+	if len(openIPs) == 0 {
+		return nil, errors.New("no open ports found")
 	}
-
-	return openIPs, errList
+	return openIPs, nil
 }
 
 func (k *kasaOutlet) getID() string {
@@ -85,13 +84,9 @@ func (k *kasaOutlet) getBrand() string {
 
 func (k *kasaOutlet) discoverDevicesIps() (map[string]interface{}, error) {
 	k.logger.Debug("Scanning for open ports on subnet:", subnet)
-	ips, errs := ScanOpenPorts()
-	if errs != nil {
-		k.logger.Error("Error scanning open ports:", errs)
-		for _, e := range errs {
-			k.logger.Error(e)
-		}
-		return nil, errs[0]
+	ips, err := ScanOpenPorts()
+	if err != nil {
+		k.logger.Error(err)
 	}
 	k.logger.Debug("Open ports found:", ips)
 
@@ -116,7 +111,7 @@ func (k *kasaOutlet) discoverDevicesIps() (map[string]interface{}, error) {
 
 func (k *kasaOutlet) state() (map[string]interface{}, error) {
 	k.logger.Debug("Executing kasa state command")
-	cmd := exec.Command("kasa", "--host", k.id, "state")
+	cmd := execCommand("kasa", "--host", k.id, "state")
 
 	o, err := cmd.Output()
 	if err != nil {
@@ -142,7 +137,7 @@ func (k *kasaOutlet) state() (map[string]interface{}, error) {
 
 func (k *kasaOutlet) sysInfo() (map[string]interface{}, error) {
 	k.logger.Debug("Executing kasa sysinfo command")
-	cmd := exec.Command("kasa", "--host", k.id, "sysinfo")
+	cmd := execCommand("kasa", "--host", k.id, "sysinfo")
 
 	o, err := cmd.Output()
 	if err != nil {
@@ -177,7 +172,7 @@ func (k *kasaOutlet) action(action string, c *gin.Context) error {
 	switch action {
 	case "on":
 		k.logger.Debug("Turning on the device")
-		cmd := exec.Command("kasa", "--host", k.id, "on")
+		cmd := execCommand("kasa", "--host", k.id, "on")
 
 		if err = cmd.Run(); err != nil {
 			k.logger.Error("Error executing kasa on command:", err)
@@ -185,7 +180,7 @@ func (k *kasaOutlet) action(action string, c *gin.Context) error {
 		}
 	case "off":
 		k.logger.Debug("Turning off the device")
-		cmd := exec.Command("kasa", "--host", k.id, "off")
+		cmd := execCommand("kasa", "--host", k.id, "off")
 		if err = cmd.Run(); err != nil {
 			k.logger.Error("Error executing kasa off command:", err)
 			return err
@@ -235,6 +230,7 @@ func (k *kasaOutlet) action(action string, c *gin.Context) error {
 		"id":     k.getID(),
 		"action": action,
 		"result": jsonData,
+		"status": "success",
 	})
 	return nil
 }
