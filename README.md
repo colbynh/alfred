@@ -31,9 +31,10 @@ A modern home automation system built with Go and React, designed to control sma
    - Docker and Docker Compose
    - Network access to your smart devices
 
-2. Start the application:
-bash
+2. Start the application
+```bash
 docker-compose up
+```
 
 3. Access:
    - Web Interface: `http://localhost:8080`
