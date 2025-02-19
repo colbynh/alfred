@@ -34,8 +34,7 @@ func OutletActionHandler(svr *gin.Engine, logger *logrus.Logger) gin.HandlerFunc
 		brand := c.Param("brand")
 		action := c.Param("action")
 
-		logger.Debugf("Received request: brand=%s, id=%s, action=%s", brand, id, action)
-
+		logger.Debugf("Received request: brand=%s, 'id=%s', 'action=%s'", brand, id, action)
 		outlet, err := newOutlet(brand, id, c, logger)
 		if err != nil {
 			logger.Errorf("Error creating outlet: %v", err)
@@ -49,8 +48,5 @@ func OutletActionHandler(svr *gin.Engine, logger *logrus.Logger) gin.HandlerFunc
 			c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 			return
 		}
-
-		logger.Debugf("Successfully executed action: %s for outlet: %s", action, id)
-		c.JSON(http.StatusOK, gin.H{"status": "success"})
 	}
 }
