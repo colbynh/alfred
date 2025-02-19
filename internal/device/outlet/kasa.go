@@ -38,11 +38,11 @@ type ScanResult struct {
 
 // Network scanning constants
 const (
-	timeout = 1 * time.Second // Timeout for checking each port
-	port    = "9999"          // Default Kasa device port
-	subnet  = "192.168.101."  // Network subnet to scan
-	startIP = 1               // First IP address in scan range
-	endIP   = 254             // Last IP address in scan range
+	timeout = 1500 * time.Millisecond // Timeout for checking each port
+	port    = "9999"                  // Default Kasa device port
+	subnet  = "192.168.101."          // Network subnet to scan
+	startIP = 1                       // First IP address in scan range
+	endIP   = 254                     // Last IP address in scan range
 )
 
 // joinHostPort combines an IP address and port into a network address string.
@@ -253,7 +253,7 @@ func (k *kasaOutlet) action(action string, c *gin.Context) error {
 			"id":     k.getID(),
 			"action": action,
 			"error":  err,
-			"result": &jsonData,
+			"result": jsonData,
 		})
 		return nil
 	}
@@ -264,7 +264,6 @@ func (k *kasaOutlet) action(action string, c *gin.Context) error {
 		"id":     k.getID(),
 		"action": action,
 		"result": jsonData,
-		"status": "success",
 	})
 	return nil
 }
