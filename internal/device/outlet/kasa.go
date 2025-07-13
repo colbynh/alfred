@@ -38,11 +38,13 @@ type ScanResult struct {
 
 // Network scanning constants
 const (
-	timeout = 1500 * time.Millisecond // Timeout for checking each port
-	port    = "9999"                  // Default Kasa device port
-	subnet  = "192.168.101."          // Network subnet to scan
-	startIP = 1                       // First IP address in scan range
-	endIP   = 254                     // Last IP address in scan range
+	timeout     = 3000 * time.Millisecond // Timeout for checking each port
+	port1       = "9999"                  // Legacy Kasa device port
+	port2       = "20002"                 // Newer Kasa device port
+	subnet      = "192.168.101."          // Network subnet to scan
+	startIP     = 1                       // First IP address in scan range
+	endIP       = 254                     // Last IP address in scan range
+	workerCount = 10                      // Number of concurrent scan workers
 )
 
 // joinHostPort combines an IP address and port into a network address string.
@@ -55,42 +57,70 @@ func dialTimeout(network, addr string, timeout time.Duration) (net.Conn, error) 
 	return net.DialTimeout(network, addr, timeout)
 }
 
-// scanIP checks if a specific IP address has the Kasa device port open.
-// It is used as a goroutine in the port scanning process.
-func scanIP(ip string, wg *sync.WaitGroup, results chan<- string) {
+// scanIPWorker is a worker that scans IPs from the jobs channel and sends results to the results channel.
+func scanIPWorker(jobs <-chan string, results chan<- string, wg *sync.WaitGroup) {
 	defer wg.Done()
-	address := joinHostPort(ip, port)
-	conn, err := dialTimeout("tcp", address, timeout)
-	if err != nil {
-		return
-	}
-	if conn != nil {
-		conn.Close()
-		results <- ip
+	for ip := range jobs {
+		ports := []string{port1, port2}
+		for _, port := range ports {
+			address := joinHostPort(ip, port)
+			conn, err := dialTimeout("tcp", address, timeout)
+			if err == nil && conn != nil {
+				conn.Close()
+				results <- ip
+				break // No need to check other port if one is open
+			}
+		}
 	}
 }
 
-// ScanOpenPorts scans the configured subnet for devices listening on the Kasa port.
+// ScanOpenPorts scans the configured subnet for devices listening on the Kasa port using a worker pool.
 // It returns a list of IP addresses where the port is open and any errors encountered.
 func ScanOpenPorts() ([]string, error) {
+	jobs := make(chan string, endIP-startIP+1)
+	results := make(chan string, endIP-startIP+1)
 	var wg sync.WaitGroup
-	results := make(chan string, endIP-startIP)
-	var openIPs []string
 
-	for i := startIP; i <= endIP; i++ {
-		ip := fmt.Sprintf("%s%d", subnet, i)
+	// Start workers
+	for i := 0; i < workerCount; i++ {
 		wg.Add(1)
-		go scanIP(ip, &wg, results)
+		go scanIPWorker(jobs, results, &wg)
 	}
 
+	// Send jobs
+	for i := startIP; i <= endIP; i++ {
+		ip := fmt.Sprintf("%s%d", subnet, i)
+		jobs <- ip
+	}
+	close(jobs)
+
+	// Wait for all workers to finish in a goroutine
+	done := make(chan struct{})
 	go func() {
 		wg.Wait()
 		close(results)
+		close(done)
 	}()
 
-	for ip := range results {
-		openIPs = append(openIPs, ip)
+	// Collect results with deduplication
+	openIPs := []string{}
+	seen := make(map[string]bool)
+	for {
+		select {
+		case ip, ok := <-results:
+			if !ok {
+				goto scanComplete
+			}
+			if !seen[ip] {
+				seen[ip] = true
+				openIPs = append(openIPs, ip)
+			}
+		case <-time.After(2 * time.Second):
+			goto scanComplete
+		}
 	}
+
+scanComplete:
 	if len(openIPs) == 0 {
 		return nil, errors.New("no open ports found")
 	}
@@ -111,10 +141,29 @@ func (k *kasaOutlet) getBrand() string {
 // The result is formatted as a JSON object with an "ips" array.
 func (k *kasaOutlet) discoverDevicesIps() (map[string]interface{}, error) {
 	k.logger.Debug("Scanning for open ports on subnet:", subnet)
-	ips, err := ScanOpenPorts()
-	if err != nil {
-		k.logger.Error(err)
+	var ips []string
+	var err error
+
+	// Try up to 3 attempts with shorter delays
+	for attempts := 0; attempts < 3; attempts++ {
+		k.logger.Debugf("Starting scan attempt %d", attempts+1)
+		ips, err = ScanOpenPorts()
+		if err == nil && len(ips) > 0 {
+			k.logger.Debugf("Scan attempt %d successful, found %d devices", attempts+1, len(ips))
+			break
+		}
+		if attempts < 2 {
+			k.logger.Debugf("Scan attempt %d failed, retrying in 5 seconds", attempts+1)
+			time.Sleep(time.Second * 5)
+		}
 	}
+
+	if err != nil {
+		k.logger.Warnf("Scan completed with error: %v", err)
+	} else {
+		k.logger.Debugf("Scan completed successfully, found %d devices", len(ips))
+	}
+
 	k.logger.Debug("Open ports found:", ips)
 
 	sr := ScanResult{IPs: ips}
@@ -206,18 +255,39 @@ func (k *kasaOutlet) action(action string, c *gin.Context) error {
 	switch action {
 	case "on":
 		k.logger.Debug("Turning on the device")
-		cmd := execCommand("kasa", "--host", k.id, "on")
-
-		if err = cmd.Run(); err != nil {
-			k.logger.Error("Error executing kasa on command:", err)
-			return err
+		// Try up to 3 times with increasing timeouts
+		for attempt := 1; attempt <= 3; attempt++ {
+			cmd := execCommand("kasa", "--host", k.id, "--timeout", "10", "on")
+			output, err := cmd.CombinedOutput()
+			if err == nil {
+				k.logger.Debugf("Kasa on command output: %s", string(output))
+				break
+			}
+			k.logger.Warnf("Attempt %d failed: %v\nOutput: %s", attempt, err, string(output))
+			if attempt < 3 {
+				time.Sleep(time.Second * time.Duration(attempt))
+			} else {
+				k.logger.Errorf("All attempts failed for kasa on command: %v\nOutput: %s", err, string(output))
+				return err
+			}
 		}
 	case "off":
 		k.logger.Debug("Turning off the device")
-		cmd := execCommand("kasa", "--host", k.id, "off")
-		if err = cmd.Run(); err != nil {
-			k.logger.Error("Error executing kasa off command:", err)
-			return err
+		// Try up to 3 times with increasing timeouts
+		for attempt := 1; attempt <= 3; attempt++ {
+			cmd := execCommand("kasa", "--host", k.id, "--timeout", "10", "off")
+			output, err := cmd.CombinedOutput()
+			if err == nil {
+				k.logger.Debugf("Kasa off command output: %s", string(output))
+				break
+			}
+			k.logger.Warnf("Attempt %d failed: %v\nOutput: %s", attempt, err, string(output))
+			if attempt < 3 {
+				time.Sleep(time.Second * time.Duration(attempt))
+			} else {
+				k.logger.Errorf("All attempts failed for kasa off command: %v\nOutput: %s", err, string(output))
+				return err
+			}
 		}
 	case "discover":
 		k.logger.Debug("Discovering devices...")
@@ -246,24 +316,27 @@ func (k *kasaOutlet) action(action string, c *gin.Context) error {
 		return err
 	}
 
-	if jsonData == nil {
-		k.logger.Warn("No data found for action:", action)
-		c.JSON(http.StatusOK, gin.H{
+	if c != nil {
+		if jsonData == nil {
+			k.logger.Warn("No data found for action:", action)
+			c.JSON(http.StatusOK, gin.H{
+				"brand":  k.getBrand(),
+				"id":     k.getID(),
+				"action": action,
+				"error":  err,
+				"result": &jsonData,
+			})
+			return nil
+		}
+
+		k.logger.Debug("Action executed successfully:", action)
+		c.JSON(200, gin.H{
 			"brand":  k.getBrand(),
 			"id":     k.getID(),
 			"action": action,
-			"error":  err,
 			"result": jsonData,
+			"status": "success",
 		})
-		return nil
 	}
-
-	k.logger.Debug("Action executed successfully:", action)
-	c.JSON(200, gin.H{
-		"brand":  k.getBrand(),
-		"id":     k.getID(),
-		"action": action,
-		"result": jsonData,
-	})
 	return nil
 }
