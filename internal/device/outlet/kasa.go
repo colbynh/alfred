@@ -38,13 +38,12 @@ type ScanResult struct {
 
 // Network scanning constants
 const (
-	timeout     = 3000 * time.Millisecond // Timeout for checking each port
-	port1       = "9999"                  // Legacy Kasa device port
-	port2       = "20002"                 // Newer Kasa device port
-	subnet      = "192.168.101."          // Network subnet to scan
-	startIP     = 1                       // First IP address in scan range
-	endIP       = 254                     // Last IP address in scan range
-	workerCount = 10                      // Number of concurrent scan workers
+	timeout = 3000 * time.Millisecond // Timeout for checking each port
+	port1   = "9999"                  // Legacy Kasa device port
+	port2   = "20002"                 // Newer Kasa device port
+	subnet  = "192.168.101."          // Network subnet to scan
+	startIP = 1                       // Focus on known device IPs
+	endIP   = 254                     // Focus on known device IPs
 )
 
 // joinHostPort combines an IP address and port into a network address string.
@@ -57,44 +56,42 @@ func dialTimeout(network, addr string, timeout time.Duration) (net.Conn, error) 
 	return net.DialTimeout(network, addr, timeout)
 }
 
-// scanIPWorker is a worker that scans IPs from the jobs channel and sends results to the results channel.
-func scanIPWorker(jobs <-chan string, results chan<- string, wg *sync.WaitGroup) {
+// scanIP checks if a specific IP address has the Kasa device port open.
+// It is used as a goroutine in the port scanning process.
+func scanIP(ip string, wg *sync.WaitGroup, results chan<- string) {
 	defer wg.Done()
-	for ip := range jobs {
-		ports := []string{port1, port2}
-		for _, port := range ports {
-			address := joinHostPort(ip, port)
-			conn, err := dialTimeout("tcp", address, timeout)
-			if err == nil && conn != nil {
-				conn.Close()
-				results <- ip
-				break // No need to check other port if one is open
+
+	// Try both legacy and newer ports
+	ports := []string{port1, port2}
+
+	for _, port := range ports {
+		address := joinHostPort(ip, port)
+		conn, err := dialTimeout("tcp", address, timeout)
+		if err == nil && conn != nil {
+			conn.Close()
+			// Use non-blocking send to avoid deadlocks
+			select {
+			case results <- ip:
+			default:
+				// Channel is full, but we found the device
 			}
+			return // Found device, no need to check other ports
 		}
 	}
 }
 
-// ScanOpenPorts scans the configured subnet for devices listening on the Kasa port using a worker pool.
-// It returns a list of IP addresses where the port is open and any errors encountered.
 func ScanOpenPorts() ([]string, error) {
-	jobs := make(chan string, endIP-startIP+1)
-	results := make(chan string, endIP-startIP+1)
 	var wg sync.WaitGroup
+	results := make(chan string, endIP-startIP+1)
+	var openIPs []string
 
-	// Start workers
-	for i := 0; i < workerCount; i++ {
-		wg.Add(1)
-		go scanIPWorker(jobs, results, &wg)
-	}
-
-	// Send jobs
 	for i := startIP; i <= endIP; i++ {
 		ip := fmt.Sprintf("%s%d", subnet, i)
-		jobs <- ip
+		wg.Add(1)
+		go scanIP(ip, &wg, results)
 	}
-	close(jobs)
 
-	// Wait for all workers to finish in a goroutine
+	// Create a channel to signal completion
 	done := make(chan struct{})
 	go func() {
 		wg.Wait()
@@ -102,20 +99,24 @@ func ScanOpenPorts() ([]string, error) {
 		close(done)
 	}()
 
-	// Collect results with deduplication
-	openIPs := []string{}
-	seen := make(map[string]bool)
+	// Wait for completion with timeout
+	select {
+	case <-done:
+		// All goroutines completed
+	case <-time.After(10 * time.Second):
+		// Timeout - collect what we have so far
+	}
+
+	// Collect results
 	for {
 		select {
 		case ip, ok := <-results:
 			if !ok {
 				goto scanComplete
 			}
-			if !seen[ip] {
-				seen[ip] = true
-				openIPs = append(openIPs, ip)
-			}
+			openIPs = append(openIPs, ip)
 		case <-time.After(2 * time.Second):
+			// Additional timeout for collecting results
 			goto scanComplete
 		}
 	}
