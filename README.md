@@ -33,11 +33,11 @@ A modern home automation system built with Go and React, designed to control sma
 
 2. Start the application
 ```bash
-docker-compose up
+sudo docker-compose up --remove-orphans --no-deps --build api ui
 ```
 
 3. Access:
-   - Web Interface: `http://localhost:8080`
+   - Web User Interface: `http://localhost:3000/#/forms/outlets`
    - API Documentation: `http://localhost:6060`
 
 Note: Your device must be on the same network as the smart devices.
