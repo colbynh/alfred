@@ -39,6 +39,7 @@ sudo docker-compose up --remove-orphans --no-deps --build api ui
 3. Access:
    - Web User Interface: `http://localhost:3000/#/forms/outlets`
    - API Documentation: `http://localhost:6060`
+   - Can also be accessed network wide via your hosts ip `hostname -I` to get ip address
 
 Note: Your device must be on the same network as the smart devices.
 
