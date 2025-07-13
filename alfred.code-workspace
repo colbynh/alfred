@@ -1,0 +1,19 @@
+{
+	"folders": [
+		{
+			"path": ".."
+		}
+	],
+	"settings": {
+		"terminal.integrated.profiles.linux": {
+			"bash": {
+				"path": "bash",
+				"args": [],
+				"icon": "terminal-bash",
+				"overrideName": true,
+				"name": "docker"
+			}
+		},
+		"terminal.integrated.defaultProfile.linux": "bash"
+	}
+}

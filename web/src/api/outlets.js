@@ -12,7 +12,7 @@ export const setOutlet = async (brand, id, action) => {
 
 export const getOutlets = async () => {
     try {
-        const response = await fetch('/api/v1/device/outlet/kasa/test/discover');
+        const response = await fetch('/api/v1/device/outlet/kasa/test/discoverByKasa');
         const data = await response.json();
         // Return just the first response object which contains the ids
         return data;

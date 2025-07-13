@@ -24,7 +24,7 @@ const ChecksRadios = () => {
           for (const id of discoveredOutlets.result.ips) {
             const state = await getOutletState('kasa', id);
             const sysInfo = await getOutletSysInfo('kasa', id);
-            initialStates[id] = state.state === 'True';
+            initialStates[id] = state.result.state === "True";
             initialNames[id] = sysInfo.result.alias || `Office Outlet (${id})`;
           }
           setOutletStates(initialStates);
@@ -47,7 +47,7 @@ const ChecksRadios = () => {
     return <div>Loading...</div>;
   }
 
-  const ToggleLight = (id) => async () => {
+  const ToggleOutlet = (id) => async () => {
     const action = outletStates[id] ? 'off' : 'on';
     await setOutlet('kasa', id, action);
     setOutletStates(prev => ({
@@ -70,7 +70,7 @@ const ChecksRadios = () => {
                 label={outletNames[id] || `Outlet (${id})`}
                 id={`formSwitch-${id}`}
                 checked={!!outletStates[id]}
-                onChange={ToggleLight(id)}
+                onChange={ToggleOutlet(id)}
               />
             ))}
           </CCardBody>

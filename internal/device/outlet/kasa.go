@@ -33,17 +33,18 @@ type kasaOutlet struct {
 // ScanResult represents the response format for device discovery.
 // It contains a list of IP addresses where Kasa devices were found.
 type ScanResult struct {
-	IPs []string `json:"ips"` // List of discovered device IPs
+	IPs []string `json:"ips"`
 }
 
 // Network scanning constants
 const (
-	timeout = 3000 * time.Millisecond // Timeout for checking each port
-	port1   = "9999"                  // Legacy Kasa device port
-	port2   = "20002"                 // Newer Kasa device port
-	subnet  = "192.168.101."          // Network subnet to scan
-	startIP = 1                       // Focus on known device IPs
-	endIP   = 254                     // Focus on known device IPs
+	timeout     = 1000 * time.Millisecond // Timeout for checking each port
+	port1       = "9999"                  // Legacy Kasa device port
+	port2       = "20002"                 // Newer Kasa device port
+	subnet      = "192.168.101."
+	IpBatchSize = 100 // Network subnet to scan
+	startIP     = 1   // Focus on known device IPs
+	endIP       = 254 // Focus on known device IPs
 )
 
 // joinHostPort combines an IP address and port into a network address string.
@@ -61,7 +62,6 @@ func dialTimeout(network, addr string, timeout time.Duration) (net.Conn, error) 
 func scanIP(ip string, wg *sync.WaitGroup, results chan<- string) {
 	defer wg.Done()
 
-	// Try both legacy and newer ports
 	ports := []string{port1, port2}
 
 	for _, port := range ports {
@@ -69,18 +69,18 @@ func scanIP(ip string, wg *sync.WaitGroup, results chan<- string) {
 		conn, err := dialTimeout("tcp", address, timeout)
 		if err == nil && conn != nil {
 			conn.Close()
-			// Use non-blocking send to avoid deadlocks
 			select {
 			case results <- ip:
 			default:
-				// Channel is full, but we found the device
 			}
-			return // Found device, no need to check other ports
+			return
 		}
 	}
 }
 
 func ScanOpenPorts() ([]string, error) {
+	startTime := time.Now()
+
 	var wg sync.WaitGroup
 	results := make(chan string, endIP-startIP+1)
 	var openIPs []string
@@ -89,6 +89,7 @@ func ScanOpenPorts() ([]string, error) {
 		ip := fmt.Sprintf("%s%d", subnet, i)
 		wg.Add(1)
 		go scanIP(ip, &wg, results)
+		time.Sleep(100 * time.Millisecond)
 	}
 
 	// Create a channel to signal completion
@@ -122,6 +123,9 @@ func ScanOpenPorts() ([]string, error) {
 	}
 
 scanComplete:
+	elapsed := time.Since(startTime)
+	fmt.Printf("Port scanning completed in %v\n", elapsed)
+
 	if len(openIPs) == 0 {
 		return nil, errors.New("no open ports found")
 	}
@@ -138,6 +142,79 @@ func (k *kasaOutlet) getBrand() string {
 	return "kasa"
 }
 
+func (k *kasaOutlet) discoverDevicesKasa() (map[string]interface{}, error) {
+	k.logger.Debug("Scanning for devices with Kasa tool on subnet:", subnet)
+	startTime := time.Now()
+
+	var wg sync.WaitGroup
+	results := make(chan string, 100)
+	start := 1
+	end := 254
+
+	for batchStart := start; batchStart <= end; batchStart += IpBatchSize {
+		discoveryTimeout := "2"
+		batchEnd := batchStart + IpBatchSize - 1
+		if batchEnd > end {
+			batchEnd = end
+		}
+
+		fmt.Printf("Scanning batch %d-%d\n", batchStart, batchEnd)
+
+		for i := batchStart; i <= batchEnd; i++ {
+			wg.Add(1)
+			go func(ipNum int) {
+				defer wg.Done()
+
+				ip := fmt.Sprintf("%s%d", subnet, ipNum)
+				cmd := execCommand("kasa", "--host", ip, "--discovery-timeout", discoveryTimeout, "state")
+				o, err := cmd.Output()
+				if err != nil {
+					fmt.Printf("Error scanning %s: %v\n\n", ip, err)
+					return
+				}
+
+				re := regexp.MustCompile(`Device state:\s+(False|True)`)
+				match := re.FindString(string(o))
+
+				if match != "" {
+					fmt.Println("Found device:", ip)
+					results <- ip
+				}
+			}(i)
+		}
+		wg.Wait()
+		fmt.Printf("Completed batch %d-%d\n", batchStart, batchEnd)
+	}
+
+	close(results)
+
+	var foundDevices []string
+	for ip := range results {
+		foundDevices = append(foundDevices, ip)
+	}
+
+	elapsed := time.Since(startTime)
+	fmt.Printf("Kasa discovery completed in %v\n", elapsed)
+	fmt.Printf("Found %d devices: %v\n", len(foundDevices), foundDevices)
+
+	sr := ScanResult{IPs: foundDevices}
+	jsonBytes, err := json.Marshal(sr)
+	if err != nil {
+		fmt.Printf("Error marshaling ScanResult: %v\n", err)
+		return nil, err
+	}
+
+	var jsonData map[string]interface{}
+	if err := json.Unmarshal(jsonBytes, &jsonData); err != nil {
+		fmt.Printf("Error unmarshaling JSON: %v\n", err)
+		return nil, err
+	}
+
+	fmt.Printf("Discovered with kasas devices JSON output: %s\n", string(jsonBytes))
+
+	return jsonData, nil
+}
+
 // discoverDevicesIps scans the network for Kasa devices and returns their IP addresses.
 // The result is formatted as a JSON object with an "ips" array.
 func (k *kasaOutlet) discoverDevicesIps() (map[string]interface{}, error) {
@@ -145,7 +222,6 @@ func (k *kasaOutlet) discoverDevicesIps() (map[string]interface{}, error) {
 	var ips []string
 	var err error
 
-	// Try up to 3 attempts with shorter delays
 	for attempts := 0; attempts < 3; attempts++ {
 		k.logger.Debugf("Starting scan attempt %d", attempts+1)
 		ips, err = ScanOpenPorts()
@@ -155,7 +231,7 @@ func (k *kasaOutlet) discoverDevicesIps() (map[string]interface{}, error) {
 		}
 		if attempts < 2 {
 			k.logger.Debugf("Scan attempt %d failed, retrying in 5 seconds", attempts+1)
-			time.Sleep(time.Second * 5)
+			time.Sleep(time.Second * 1)
 		}
 	}
 
@@ -256,7 +332,7 @@ func (k *kasaOutlet) action(action string, c *gin.Context) error {
 	switch action {
 	case "on":
 		k.logger.Debug("Turning on the device")
-		// Try up to 3 times with increasing timeouts
+
 		for attempt := 1; attempt <= 3; attempt++ {
 			cmd := execCommand("kasa", "--host", k.id, "--timeout", "10", "on")
 			output, err := cmd.CombinedOutput()
@@ -274,7 +350,7 @@ func (k *kasaOutlet) action(action string, c *gin.Context) error {
 		}
 	case "off":
 		k.logger.Debug("Turning off the device")
-		// Try up to 3 times with increasing timeouts
+
 		for attempt := 1; attempt <= 3; attempt++ {
 			cmd := execCommand("kasa", "--host", k.id, "--timeout", "10", "off")
 			output, err := cmd.CombinedOutput()
@@ -290,8 +366,15 @@ func (k *kasaOutlet) action(action string, c *gin.Context) error {
 				return err
 			}
 		}
-	case "discover":
-		k.logger.Debug("Discovering devices...")
+	case "discoverByKasa":
+		k.logger.Debug("Discovering devices using kasa tool...")
+		jsonData, err = k.discoverDevicesKasa()
+		if err != nil {
+			k.logger.Error("Error discovering devices:", err)
+			return err
+		}
+	case "discoverByPorts":
+		k.logger.Debug("Discovering devices using port scanning...")
 		jsonData, err = k.discoverDevicesIps()
 		if err != nil {
 			k.logger.Error("Error discovering devices:", err)

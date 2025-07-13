@@ -28,7 +28,7 @@ const Dropdowns = React.lazy(() => import('./views/buttons/dropdowns/Dropdowns')
 
 //Forms
 const ChecksRadios = React.lazy(() => import('./views/forms/checks-radios/ChecksRadios'))
-const Lights = React.lazy(() => import('./views/forms/checks-radios/LightButtons'))
+const Outlets = React.lazy(() => import('./views/forms/checks-radios/OutletButtons'))
 const FloatingLabels = React.lazy(() => import('./views/forms/floating-labels/FloatingLabels'))
 const FormControl = React.lazy(() => import('./views/forms/form-control/FormControl'))
 const InputGroup = React.lazy(() => import('./views/forms/input-group/InputGroup'))
@@ -83,7 +83,7 @@ const routes = [
   { path: '/forms/form-control', name: 'Form Control', element: FormControl },
   { path: '/forms/select', name: 'Select', element: Select },
   { path: '/forms/checks-radios', name: 'Checks & Radios', element: ChecksRadios },
-  { path: '/forms/lights', name: 'Checks & Radios', element: Lights },
+  { path: '/forms/outlets', name: 'Checks & Radios', element: Outlets },
   { path: '/forms/range', name: 'Range', element: Range },
   { path: '/forms/input-group', name: 'Input Group', element: InputGroup },
   { path: '/forms/floating-labels', name: 'Floating Labels', element: FloatingLabels },
