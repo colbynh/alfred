@@ -34,4 +34,4 @@ EXPOSE 8080 6060
 WORKDIR /app
 
 # Start both the API and godoc server
-CMD ["sh", "-c", "./bin/air -c .air.toml & godoc -http=:6060"]
+CMD ["sh", "-c", "$GOPATH/bin/air -c .air.toml & godoc -http=:6060"]
