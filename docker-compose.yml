@@ -15,8 +15,8 @@ services:
       dockerfile: dockerfile
     container_name: api
     ports:
-      - "8080:8080"
-      - "6060:6060"
+      - "0.0.0.0:8080:8080"
+      - "0.0.0.0:6060:6060"
     volumes:
       - ./:/app
     environment:
@@ -25,7 +25,7 @@ services:
     image: node:20-alpine
     container_name: ui
     ports:
-      - "3000:3000"
+      - "0.0.0.0:3000:3000"
     volumes:
       - ./web:/app
     working_dir: /app

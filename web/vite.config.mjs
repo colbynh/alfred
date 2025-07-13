@@ -40,10 +40,11 @@ export default defineConfig(() => {
       extensions: ['.mjs', '.js', '.ts', '.jsx', '.tsx', '.json', '.scss'],
     },
     server: {
+      host: '0.0.0.0',
       port: 3000,
       proxy: {
         '/api': {
-          target: 'http://localhost:8080',
+          target: 'http://api:8080',
           changeOrigin: true,
         },
       },
