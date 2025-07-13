@@ -1,0 +1,16 @@
+apiVersion: networking.istio.io/v1alpha3
+kind: VirtualService
+metadata:
+  name: alfred-gw
+  namespace: alfred
+spec:
+  hosts:
+    - iot.dutcheshouse.com
+  gateways:
+    - istio-system/default-gateway
+  http:
+    - route:
+        - destination:
+            host: alfred-web
+            port:
+              number: 80

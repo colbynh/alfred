@@ -1,0 +1,22 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: alfred-deployment
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: alfred
+  template:
+    metadata:
+      labels:
+        app: alfred
+        track: stable
+    spec:
+      containers:
+        - name: alfred-web
+          image: localhost:32000/alfred-web:latest
+          # imagePullPolicy: Never
+          ports:
+            - containerPort: 8080 # API port
+            - containerPort: 6060
